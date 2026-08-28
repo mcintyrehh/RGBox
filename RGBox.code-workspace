@@ -1,0 +1,27 @@
+{
+	"folders": [
+		{
+			"name": "RGBox",
+			"path": "."
+		},
+		{
+			"name": "CIRCUITPY",
+			"path": "../../../../Volumes/CIRCUITPY"
+		}
+	],
+	"settings": {
+		"python.languageServer": "Pylance",
+		"circuitpython.board.version": "10.1.4",
+		"python.analysis.diagnosticSeverityOverrides": {
+			"reportMissingModuleSource": "none",
+			"reportShadowedImports": "none"
+		},
+		"python.analysis.extraPaths": [
+			"/Users/henry/.vscode/extensions/joedevivo.vscode-circuitpython-0.2.0-darwin-arm64/boards/0x239A/0x80EC",
+			"/Users/henry/.vscode/extensions/joedevivo.vscode-circuitpython-0.2.0-darwin-arm64/stubs",
+			"/Users/henry/Library/Application Support/Code/User/globalStorage/joedevivo.vscode-circuitpython/bundle/20260826/adafruit-circuitpython-bundle-py-20260826/lib"
+		],
+		"circuitpython.board.vid": "0x239A",
+		"circuitpython.board.pid": "0x80EC"
+	}
+}
