@@ -12,3 +12,5 @@
   * It gets imported as one "group" of lines so get things lined up decently first and then we can ungroup and remove alignment features. 
     * right click on the outline -> Grouping -> Ungroup
     * now we can delete alignment features once the schematic is placed appropriately 
+
+* Feather not showing up on setup? Slowly double tap reset (press, 1s, press). This enters bootloader mode, drag the circuitpython `.uf2` over and bada-bing-bada-boom
