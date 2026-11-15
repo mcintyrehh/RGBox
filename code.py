@@ -1,12 +1,14 @@
 from os import getenv
 from analogio import AnalogIn
 
+import adafruit_drv2605
 import adafruit_ads7830.ads7830 as ADC
 from adafruit_ads7830.analog_in import AnalogIn as I2CAnalogIn
 
 import alarm
 import alarm.pin
 import board
+import busio
 import digitalio
 import math
 # import neopixel
@@ -54,6 +56,12 @@ if None in [ssid, password]:
 
 # Setup local controls and LEDs before starting Wi-Fi.
 # pixel = neopixel.NeoPixel(board.NEOPIXEL, 1, brightness=0.2)
+
+## Haptic Feedback Driver Testing
+i2c = busio.I2C(board.SCL, board.SDA)
+drv = adafruit_drv2605.DRV2605(i2c)
+drv.sequence[0] = adafruit_drv2605.Effect(17)
+## Haptic Feedback Driver Testing
 
 wake_pin = board.D38
 light_mode_pin = board.TX
@@ -255,6 +263,7 @@ def set_warmth(kelvin_temp, dimming):
     wiz_1.send(msg)
     wiz_2.send(msg)
     wiz_3.send(msg)
+    drv.play()
 
 def run_warmth_mode():
     global last_kelvin, last_dimming
@@ -305,5 +314,5 @@ while True:
         run_rgb_mode()
     else:
         run_warmth_mode()
-    
+
     time.sleep(.1)
