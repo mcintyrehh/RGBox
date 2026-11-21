@@ -1,3 +1,5 @@
+import i2c_scan  # TEMP: I2C debug scan, remove after
+
 from os import getenv
 from analogio import AnalogIn
 
@@ -5,8 +7,6 @@ import adafruit_drv2605
 import adafruit_ads7830.ads7830 as ADC
 from adafruit_ads7830.analog_in import AnalogIn as I2CAnalogIn
 
-import alarm
-import alarm.pin
 import board
 import busio
 import digitalio
@@ -37,6 +37,7 @@ ADC_MIN = 575   # measured min
 ESP32_S2_REF_VOLTAGE = 3.3
 #  ADC is 8 bit but CircuitPython bitshifts everything to 16 bit for max compatibility
 ADS7830_MAX = 255 << 8 # 65280
+# dimming = 65535
 
 # Uncomment if using the Adafruit Feather ESP32-S2 TFT w/ display
 # We need to flip the display, it is mounted upside down in the case.
@@ -58,12 +59,11 @@ if None in [ssid, password]:
 # pixel = neopixel.NeoPixel(board.NEOPIXEL, 1, brightness=0.2)
 
 ## Haptic Feedback Driver Testing
-i2c = busio.I2C(board.SCL, board.SDA)
-drv = adafruit_drv2605.DRV2605(i2c)
-drv.sequence[0] = adafruit_drv2605.Effect(17)
+# i2c = busio.I2C(board.SCL, board.SDA)
+# drv = adafruit_drv2605.DRV2605(i2c)
+# drv.sequence[0] = adafruit_drv2605.Effect(17)
 ## Haptic Feedback Driver Testing
 
-wake_pin = board.D38
 light_mode_pin = board.TX
 dimmer_pin = board.A1
 
@@ -72,10 +72,13 @@ slide_pot_g_pin = board.A3
 slide_pot_b_pin = board.A4
 
 # Channels on the ADS7830 (0-7), not Feather pins
-SLIDE_POT_R_CHANNEL = 2
-SLIDE_POT_G_CHANNEL = 3
-SLIDE_POT_B_CHANNEL = 4
-DIMMER_THUMBWHEEL_CHANNEL = 5
+SLIDE_POT_R_CHANNEL = 1
+SLIDE_POT_G_CHANNEL = 2
+SLIDE_POT_B_CHANNEL = 3
+DIMMER_THUMBWHEEL_CHANNEL = 0
+
+# Frogdor's LED
+led_frogdor = pwmio.PWMOut(board.D13, frequency=5000, duty_cycle=65535)
 
 # Duty cycles are inverted because the LEDs are common anode, so 0 is fully on and 65535 is fully off
 led_r = pwmio.PWMOut(board.D5, frequency=5000, duty_cycle=0)
@@ -85,10 +88,6 @@ led_b = pwmio.PWMOut(board.D6, frequency=5000, duty_cycle=0)
 diff_r = pwmio.PWMOut(board.D12, frequency=5000, duty_cycle=0)
 diff_g = pwmio.PWMOut(board.D11, frequency=5000, duty_cycle=0)
 diff_b = pwmio.PWMOut(board.D10, frequency=5000, duty_cycle=0)
-
-wake_input = digitalio.DigitalInOut(wake_pin)
-wake_input.direction = digitalio.Direction.INPUT
-wake_input.pull = digitalio.Pull.DOWN
 
 # Mode pins are connected to ground so we pull UP by default so 
 # when they are activated they read 0v. Wiring to ground just makes
@@ -102,7 +101,7 @@ using_feather_adc = True
 try:
 # Initialize ADS7830
     i2c = board.I2C()
-    adc = ADC.ADS7830(i2c)
+    adc = ADC.ADS7830(i2c, int_ref_power_down=True)
 
     analog_r = I2CAnalogIn(adc, SLIDE_POT_R_CHANNEL)
     analog_g = I2CAnalogIn(adc, SLIDE_POT_G_CHANNEL)
@@ -110,7 +109,10 @@ try:
     analog_dimmer = I2CAnalogIn(adc, DIMMER_THUMBWHEEL_CHANNEL)
 
     using_feather_adc = False
-except:
+    print("Successfully initialized ADS7830, using external ADC")
+except Exception as e:
+    print(f"An error occurred: {e}")
+    print("Failed to initialize ADS7830, using internal ADC")
     analog_r = AnalogIn(slide_pot_r_pin)
     analog_g = AnalogIn(slide_pot_g_pin)
     analog_b = AnalogIn(slide_pot_b_pin)
@@ -120,11 +122,14 @@ except:
 def get_adc_ratio(pin, normalize_adc_readings):
     # invert because when the pot is fully to the right, it has maximum resistance
     # so we need to map lowest voltage to highest value
-    value = ADC_MAX - pin.value
     if normalize_adc_readings:
+        # Feather's internal ADC: invert against its measured max and clamp
+        value = ADC_MAX - pin.value
         return max((min(value, ADC_MAX) - ADC_MIN) / (ADC_MAX - ADC_MIN), 0)
     else:
-        return value / 65280
+        # ADS7830: full 8-bit range, so invert against its own max
+        value = ADS7830_MAX - pin.value
+        return min(max(value / ADS7830_MAX, 0), 1)
 
 
 def apply_leds(r, g, b, d_r, d_g, d_b, dimming=100):
@@ -234,14 +239,6 @@ wiz_3 = WizSocket(pool, WIZ_IP_3, WIZ_PORT)
 print("My MAC addr:", [hex(i) for i in wifi.radio.mac_address])
 print(f"My IP address is {wifi.radio.ipv4_address}")
 
-def enter_deep_sleep():
-    print("entering deep sleep")
-    wake_input.deinit()
-
-    # D13 needs an external pulldown so releasing 3.3V makes it low and wakes the board.
-    wake_alarm = alarm.pin.PinAlarm(pin=wake_pin, value=False, pull=False)
-    alarm.exit_and_deep_sleep_until_alarms(wake_alarm)
-
 def battery_color(percent):
     if percent <= 25:
         return (255, 0, 0)      # red
@@ -263,7 +260,7 @@ def set_warmth(kelvin_temp, dimming):
     wiz_1.send(msg)
     wiz_2.send(msg)
     wiz_3.send(msg)
-    drv.play()
+    # drv.play()
 
 def run_warmth_mode():
     global last_kelvin, last_dimming
@@ -276,6 +273,12 @@ def run_warmth_mode():
 
         show_warmth_leds(kelvin, dimming)
 
+def isDifferent(val1, val2, delta = 1):
+    if val2 is None: 
+        return True
+
+    return abs(val1 - val2) > delta
+
 def run_rgb_mode():
     global last_r, last_g, last_b, last_dimming
     #ceil to prevent changing decimal values
@@ -285,7 +288,7 @@ def run_rgb_mode():
     r, g, b = get_rgb()
     dimming = get_dimming()
 
-    if r != last_r or g != last_g or b != last_b or dimming != last_dimming:
+    if isDifferent(r, last_r) or isDifferent(g, last_g) or isDifferent(b, last_b) or isDifferent(dimming, last_dimming):
         set_rgb(r, g, b, dimming)
         last_r, last_g, last_b = r, g, b
         last_dimming = dimming
@@ -298,9 +301,6 @@ def run_rgb_mode():
         print(f"led_r:{led_r.duty_cycle} led_g:{led_g.duty_cycle} led_b:{led_b.duty_cycle}")
 
 while True:
-    if wake_input.value:
-        enter_deep_sleep()
-
     mode = get_mode()
     if mode != last_mode:
         print(f"light mode switch: {mode} (TX={light_mode_input.value})")
